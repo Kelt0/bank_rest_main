@@ -1,0 +1,46 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/bank_db
+    username: postgres
+    password: admin
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/migration/master.yaml
+    clear-checksums: true
+
+  web:
+    resources:
+      static-locations: file:./docs/, classpath:/META-INF/resources/, classpath:/resources/, classpath:/static/, classpath:/public/
+
+  security:
+    jwt:
+      secret: B4nkC4rdS3cr3tK3yF0rJvT7890!@#$AbCdEfGhIjKlMnOpQrStUvWxYz
+      expiration: 86400000
+      header: Authorization
+      prefix: Bearer
+card:
+  encryption:
+    secret: S3cr3tC4rdEncrYptK3yF0rDBData456789
+    algorithm: AES
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    url: /openapi.yaml
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+

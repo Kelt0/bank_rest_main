@@ -1,0 +1,5 @@
+databaseChangeLog:
+  - include:
+      file: db/migration/V001_create_initial_tables.yaml
+  - include:
+      file: db/migration/V002_insert_initial_data.yaml

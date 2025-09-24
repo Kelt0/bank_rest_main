@@ -1,0 +1,264 @@
+openapi: 3.0.1
+info:
+  title: Bank Card Service API
+  version: v1
+  description: API для управления банковскими картами и переводами. Реализован ролевой доступ (USER/ADMIN), шифрование данных и Liquibase.
+
+servers:
+  - url: http://localhost:8080
+    description: Локальный сервер разработки
+
+tags:
+  - name: Аутентификация
+    description: Вход в систему и получение JWT-токена.
+  - name: Пользователь (USER)
+    description: Эндпоинты для обычных пользователей (просмотр своих карт, переводы).
+  - name: Администратор (ADMIN)
+    description: Эндпоинты для администраторов (создание, блокировка/удаление карт).
+
+# КОМПОНЕНТЫ (DTO И БЕЗОПАСНОСТЬ)
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: user
+          description: Имя пользователя.
+        password:
+          type: string
+          example: user
+          description: Пароль.
+
+    JwtResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+          description: JWT Bearer Token для авторизации в защищенных эндпоинтах.
+        type:
+          type: string
+          example: Bearer
+          description: Тип токена.
+
+    CardResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 10
+        maskedCardNumber:
+          type: string
+          example: "************1111"
+          description: Маскированный номер карты (видно только 4 первых и 4 последних цифры).
+        balance:
+          type: number
+          format: float
+          example: 1234.50
+        status:
+          type: string
+          enum: [ACTIVE, BLOCKED]
+          example: ACTIVE
+        ownerId:
+          type: integer
+          format: int64
+          example: 101
+
+    TransferRequest:
+      type: object
+      required:
+        - sourceCardId
+        - targetCardId
+        - amount
+      properties:
+        sourceCardId:
+          type: integer
+          format: int64
+          example: 10
+          description: ID карты, с которой будет списана сумма.
+        targetCardId:
+          type: integer
+          format: int64
+          example: 20
+          description: ID карты, на которую будет зачислена сумма.
+        amount:
+          type: number
+          format: float
+          example: 100.00
+          description: Сумма перевода (должна быть положительной).
+
+    CardCreationRequest:
+      type: object
+      required:
+        - ownerId
+        - cardNumber
+        - expiryDate
+      properties:
+        ownerId:
+          type: integer
+          format: int64
+          example: 101
+          description: ID пользователя, которому принадлежит карта.
+        cardNumber:
+          type: string
+          example: "4111222233334444"
+          description: Полный номер карты (будет зашифрован в БД).
+        expiryDate:
+          type: string
+          format: date
+          example: "2028-12-31"
+          description: Срок действия карты в формате ГГГГ-ММ-ДД.
+
+# ЭНДПОИНТЫ
+paths:
+  # АУТЕНТИФИКАЦИЯ
+  /auth/login:
+    post:
+      tags:
+        - Аутентификация
+      summary: Аутентификация пользователя и получение JWT-токена
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход. Возвращает токен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtResponse'
+        '401':
+          description: Неверные учетные данные.
+
+  # ПОЛЬЗОВАТЕЛЬСКИЕ ЭНДПОИНТЫ (/api/v1/user)
+  /api/v1/user/cards:
+    get:
+      tags:
+        - Пользователь (USER)
+      summary: Получение всех карт текущего пользователя
+      security:
+        - bearerAuth: [] # Защищено JWT (требует ROLE_USER)
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, default: 0}
+          description: Номер страницы (начиная с 0).
+        - name: size
+          in: query
+          schema: {type: integer, default: 10}
+          description: Количество элементов на странице.
+      responses:
+        '200':
+          description: Успешный запрос.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardResponse'
+        '403':
+          description: Доступ запрещен (неверный токен или роль).
+
+  /api/v1/user/cards/transfer:
+    post:
+      tags:
+        - Пользователь (USER)
+      summary: Перевод средств между картами
+      security:
+        - bearerAuth: [] # Защищено JWT (требует ROLE_USER)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '200':
+          description: Перевод успешно выполнен.
+        '400':
+          description: Ошибка валидации (например, сумма <= 0, недостаточно средств).
+        '403':
+          description: Карта-источник не принадлежит текущему пользователю.
+        '404':
+          description: Карта не найдена.
+
+
+  # АДМИНИСТРАТИВНЫЕ ЭНДПОИНТЫ (/api/v1/admin)
+  /api/v1/admin/cards:
+    post:
+      tags:
+        - Администратор (ADMIN)
+      summary: Создание новой карты для указанного пользователя
+      security:
+        - bearerAuth: [] # Защищено JWT (требует ROLE_ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardCreationRequest'
+      responses:
+        '201':
+          description: Карта успешно создана.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardResponse'
+        '403':
+          description: Доступ запрещен (не хватает прав администратора).
+
+  /api/v1/admin/cards/{cardId}/status:
+    put:
+      tags:
+        - Администратор (ADMIN)
+      summary: Изменение статуса карты (ACTIVE/BLOCKED)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+          description: ID карты для изменения.
+        - name: status
+          in: query
+          required: true
+          schema: {type: string, enum: [ACTIVE, BLOCKED]}
+          description: Новый статус карты.
+      responses:
+        '200': {description: Статус карты успешно обновлен.}
+        '404': {description: Карта не найдена.}
+        '403': {description: Доступ запрещен.}
+
+  /api/v1/admin/cards/{cardId}:
+    delete:
+      tags:
+        - Администратор (ADMIN)
+      summary: Удаление карты
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+          description: ID карты для удаления.
+      responses:
+        '204': {description: Карта успешно удалена (No Content).}
+        '404': {description: Карта не найдена.}
+        '403': {description: Доступ запрещен.}
