@@ -17,6 +17,12 @@ public class CardCreationRequest {
     @Pattern(regexp = "^(0[1-9]|1[0-2])/[0-9]{2}$", message = "Expiry date format must be MM/YY")
     private String expiryDate;
 
+    public CardCreationRequest(Long ownerId, String cardNumber, String expiryDate) {
+        this.ownerId = ownerId;
+        this.cardNumber = cardNumber;
+        this.expiryDate = expiryDate;
+    }
+
     public Long getOwnerId() {
         return ownerId;
     }

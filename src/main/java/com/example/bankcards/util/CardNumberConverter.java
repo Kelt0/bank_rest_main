@@ -12,16 +12,16 @@ import java.util.Base64;
 @Component
 @Converter
 public class CardNumberConverter implements AttributeConverter<String, String> {
-    private static EncryptionConfig encryptionConfig;
+    private EncryptionConfig encryptionConfig;
 
     @Autowired
     public void setEncryptionConfig(EncryptionConfig encryptionConfig) {
-        CardNumberConverter.encryptionConfig = encryptionConfig;
+        this.encryptionConfig = encryptionConfig;
     }
 
     @Override
     public String convertToDatabaseColumn(String plainText) {
-        if(plainText == null || plainText.isEmpty()){
+        if (plainText == null || plainText.isEmpty()) {
             return null;
         }
         try{

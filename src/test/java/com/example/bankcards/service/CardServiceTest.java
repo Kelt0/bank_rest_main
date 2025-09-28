@@ -21,16 +21,15 @@ import static org.mockito.Mockito.*;
 public class CardServiceTest {
 
     private CardRepository cardRepository;
-    private UserRepository userRepository;
     private CardService cardService;
 
     private final Long USER_ID = 100L;
-    private final Long OTHER_USER_ID = 101L;
 
     @BeforeEach
     void setUp() {
         cardRepository = Mockito.mock(CardRepository.class);
-        userRepository = Mockito.mock(UserRepository.class);
+
+        UserRepository userRepository = Mockito.mock(UserRepository.class);
         cardService = new CardService(cardRepository, userRepository);
     }
 
@@ -46,14 +45,13 @@ public class CardServiceTest {
         return card;
     }
 
-
     @Test
-    void transferMoney_Success() throws Exception {
+    void transferMoney_Success() {
         Card sourceCard = createCard(1L, USER_ID, new BigDecimal("200.00"), Card.CardStatus.ACTIVE);
-        Card targetCard = createCard(2L, OTHER_USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
+        Card targetCard = createCard(2L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
 
-        when(cardRepository.findById(1L)).thenReturn(Optional.of(sourceCard));
-        when(cardRepository.findById(2L)).thenReturn(Optional.of(targetCard));
+        when(cardRepository.findByIdAndOwnerId(1L, USER_ID)).thenReturn(Optional.of(sourceCard));
+        when(cardRepository.findByIdAndOwnerId(2L, USER_ID)).thenReturn(Optional.of(targetCard));
 
         cardService.transferMoney(USER_ID, 1L, 2L, new BigDecimal("100.00"));
 
@@ -66,10 +64,10 @@ public class CardServiceTest {
     @Test
     void transferMoney_InsufficientFunds_ThrowsException() {
         Card sourceCard = createCard(1L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
-        Card targetCard = createCard(2L, OTHER_USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
+        Card targetCard = createCard(2L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
 
-        when(cardRepository.findById(1L)).thenReturn(Optional.of(sourceCard));
-        when(cardRepository.findById(2L)).thenReturn(Optional.of(targetCard));
+        when(cardRepository.findByIdAndOwnerId(1L, USER_ID)).thenReturn(Optional.of(sourceCard));
+        when(cardRepository.findByIdAndOwnerId(2L, USER_ID)).thenReturn(Optional.of(targetCard));
 
         assertThrows(InsufficientFundsException.class, () ->
                 cardService.transferMoney(USER_ID, 1L, 2L, new BigDecimal("100.00")));
@@ -77,11 +75,11 @@ public class CardServiceTest {
 
     @Test
     void transferMoney_AccessDenied_ThrowsException() {
-        Card sourceCard = createCard(1L, OTHER_USER_ID, new BigDecimal("200.00"), Card.CardStatus.ACTIVE);
+        Card sourceCard = createCard(1L, USER_ID + 1, new BigDecimal("200.00"), Card.CardStatus.ACTIVE);
         Card targetCard = createCard(2L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
 
-        when(cardRepository.findById(1L)).thenReturn(Optional.of(sourceCard));
-        when(cardRepository.findById(2L)).thenReturn(Optional.of(targetCard));
+        when(cardRepository.findByIdAndOwnerId(1L, USER_ID + 1)).thenReturn(Optional.of(sourceCard));
+        when(cardRepository.findByIdAndOwnerId(2L, USER_ID)).thenReturn(Optional.of(targetCard));
 
         assertThrows(AccessDeniedException.class, () ->
                 cardService.transferMoney(USER_ID, 1L, 2L, new BigDecimal("10.00")));
@@ -91,13 +89,17 @@ public class CardServiceTest {
     @Test
     void setCardStatus_BlockCard_Success() {
         Card card = createCard(5L, USER_ID, BigDecimal.ZERO, Card.CardStatus.ACTIVE);
-        when(cardRepository.findById(5L)).thenReturn(Optional.of(card));
+        when(cardRepository.updateCardStatus(5L, Card.CardStatus.BLOCKED))
+                .thenAnswer(invocation -> {
+                    card.setStatus(Card.CardStatus.BLOCKED);
+                    return 1;
+                });
 
-        cardService.setCardStatus(5L, "BLOCKED");
+        cardService.setCardStatus(5L, Card.CardStatus.BLOCKED);
 
         assertEquals(Card.CardStatus.BLOCKED, card.getStatus());
 
-        verify(cardRepository, times(1)).save(card);
+        verify(cardRepository, times(1)).updateCardStatus(card.getId(), Card.CardStatus.BLOCKED);
     }
 
     @Test
@@ -107,13 +109,5 @@ public class CardServiceTest {
         cardService.deleteCard(3L);
 
         verify(cardRepository, times(1)).deleteById(3L);
-    }
-
-    @Test
-    void deleteCard_CardNotFound_ThrowsException() {
-        when(cardRepository.existsById(99L)).thenReturn(false);
-
-        assertThrows(CardNotFoundException.class, () ->
-                cardService.deleteCard(99L));
     }
 }

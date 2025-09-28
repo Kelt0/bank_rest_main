@@ -19,7 +19,7 @@ public class Card {
 
     @Convert(converter = CardNumberConverter.class)
     @Column(name = "encrypted_card_number",unique = true ,nullable = false)
-    private String encryptedCardNumber;
+    private String cardNumber;
 
     @Column(name = "balance", nullable = false)
     private BigDecimal balance;
@@ -63,12 +63,12 @@ public class Card {
         this.balance = balance;
     }
 
-    public String getEncryptedCardNumber() {
-        return encryptedCardNumber;
+    public String getCardNumber() {
+        return cardNumber;
     }
 
-    public void setEncryptedCardNumber(String encryptedCardNumber) {
-        this.encryptedCardNumber = encryptedCardNumber;
+    public void setCardNumber(String cardNumber) {
+        this.cardNumber = cardNumber;
     }
 
     public User getOwner() {
@@ -77,9 +77,6 @@ public class Card {
 
     public void setOwner(User owner) {
         this.owner = owner;
-    }
-
-    public void setCardNumber(String cardNumber) {
     }
 
     public enum CardStatus {

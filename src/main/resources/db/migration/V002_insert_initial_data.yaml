@@ -24,7 +24,7 @@ databaseChangeLog:
             columns:
               - column: { name: id, valueNumeric: 100 }
               - column: { name: username, value: admin }
-              - column: { name: password, value: $2a$10$wT02jW.VjX5rZ8Q2o2K.jO/B4g8C4yJ4rQ.xK8N0I5pGj3H6M8o2E }
+              - column: { name: password, value: "$2a$10$52.tgS2ZeZkQ7axqnS8Yee6rXFLDUBMPcksqgjJtqn1Bu1ZbK7RsO" }
               - column: { name: is_enabled, valueBoolean: true }
 
         - insert:
@@ -42,7 +42,7 @@ databaseChangeLog:
             columns:
               - column: { name: id, valueNumeric: 101 }
               - column: { name: username, value: user }
-              - column: { name: password, value: $2a$10$j8C3L9P1vA0m7K4x9yW2hO/Z1e8B4G7F3D6E9T2R5Q0A7D5F }
+              - column: { name: password, value: "$2a$10$pRn2Wcp4FUvLYjdPHqpWhOG.wBFyOHsj47hZ.HBgwTq8NnYzLP0pC" }
               - column: { name: is_enabled, valueBoolean: true }
         - insert:
             tableName: user_roles

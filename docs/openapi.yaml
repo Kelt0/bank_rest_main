@@ -12,9 +12,9 @@ tags:
   - name: Аутентификация
     description: Вход в систему и получение JWT-токена.
   - name: Пользователь (USER)
-    description: Эндпоинты для обычных пользователей (просмотр своих карт, переводы).
+    description: Эндпоинты для обычных пользователей (просмотр своих карт, переводы, баланс).
   - name: Администратор (ADMIN)
-    description: Эндпоинты для администраторов (создание, блокировка/удаление карт).
+    description: Эндпоинты для администраторов (создание, блокировка/удаление карт, управление пользователями).
 
 # КОМПОНЕНТЫ (DTO И БЕЗОПАСНОСТЬ)
 components:
@@ -23,6 +23,15 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  parameters:
+    Pageable:
+      in: query
+      name: pageable
+      schema:
+        type: string
+        example: page=0&size=10&sort=id,asc
+      description: Параметры пагинации и сортировки (например, 'page=0&size=10&sort=id,desc').
 
   schemas:
     LoginRequest:
@@ -45,59 +54,21 @@ components:
       properties:
         token:
           type: string
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-          description: JWT Bearer Token для авторизации в защищенных эндпоинтах.
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+          description: JWT токен.
         type:
           type: string
           example: Bearer
           description: Тип токена.
 
-    CardResponse:
+    BalanceResponse:
       type: object
       properties:
-        id:
-          type: integer
-          format: int64
-          example: 10
-        maskedCardNumber:
-          type: string
-          example: "************1111"
-          description: Маскированный номер карты (видно только 4 первых и 4 последних цифры).
         balance:
           type: number
           format: float
-          example: 1234.50
-        status:
-          type: string
-          enum: [ACTIVE, BLOCKED]
-          example: ACTIVE
-        ownerId:
-          type: integer
-          format: int64
-          example: 101
-
-    TransferRequest:
-      type: object
-      required:
-        - sourceCardId
-        - targetCardId
-        - amount
-      properties:
-        sourceCardId:
-          type: integer
-          format: int64
-          example: 10
-          description: ID карты, с которой будет списана сумма.
-        targetCardId:
-          type: integer
-          format: int64
-          example: 20
-          description: ID карты, на которую будет зачислена сумма.
-        amount:
-          type: number
-          format: float
-          example: 100.00
-          description: Сумма перевода (должна быть положительной).
+          example: 100.50
+          description: Текущий баланс карты.
 
     CardCreationRequest:
       type: object
@@ -113,17 +84,111 @@ components:
           description: ID пользователя, которому принадлежит карта.
         cardNumber:
           type: string
-          example: "4111222233334444"
-          description: Полный номер карты (будет зашифрован в БД).
+          example: '1111222233334444'
+          description: Полный номер карты (16-19 цифр).
+          pattern: '^\d{16,19}$'
+        expiryDate:
+          type: string
+          example: '12/28'
+          description: Срок действия карты в формате MM/YY.
+          pattern: '^(0[1-9]|1[0-2])/[0-9]{2}$'
+
+    CardStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, BLOCKED]
+          example: BLOCKED
+          description: Новый статус карты.
+
+    TransferRequest:
+      type: object
+      required:
+        - sourceCardId
+        - targetCardId
+        - amount
+      properties:
+        sourceCardId:
+          type: integer
+          format: int64
+          example: 1
+          description: ID карты, с которой осуществляется перевод.
+        targetCardId:
+          type: integer
+          format: int64
+          example: 2
+          description: ID карты, на которую осуществляется перевод.
+        amount:
+          type: number
+          format: float
+          example: 100.00
+          description: Сумма перевода (должна быть положительной).
+          minimum: 0.01
+
+    CardResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+          description: ID карты.
+        ownerId:
+          type: integer
+          format: int64
+          example: 101
+          description: ID владельца карты.
+        maskedCardNumber:
+          type: string
+          example: '1111 **** **** 4444'
+          description: Маскированный номер карты.
+        balance:
+          type: number
+          format: float
+          example: 1000.50
+          description: Текущий баланс карты.
         expiryDate:
           type: string
           format: date
-          example: "2028-12-31"
-          description: Срок действия карты в формате ГГГГ-ММ-ДД.
+          example: '2028-12-31'
+          description: Срок действия карты.
+        status:
+          type: string
+          enum: [ACTIVE, BLOCKED]
+          example: ACTIVE
+          description: Статус карты.
+
+    PageCardResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardResponse'
+          description: Список карт на текущей странице.
+        totalPages:
+          type: integer
+          example: 1
+          description: Общее количество страниц.
+        totalElements:
+          type: integer
+          example: 1
+          description: Общее количество элементов.
+        size:
+          type: integer
+          example: 10
+          description: Размер страницы.
+        number:
+          type: integer
+          example: 0
+          description: Текущий номер страницы (начиная с 0).
+
 
 # ЭНДПОИНТЫ
 paths:
-  # АУТЕНТИФИКАЦИЯ
   /auth/login:
     post:
       tags:
@@ -137,42 +202,56 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Успешный вход. Возвращает токен.
+          description: Успешная аутентификация.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JwtResponse'
-        '401':
-          description: Неверные учетные данные.
+        '401': {description: Неверные учетные данные (логин/пароль).}
 
-  # ПОЛЬЗОВАТЕЛЬСКИЕ ЭНДПОИНТЫ (/api/v1/user)
+  # Эндпоинты для Пользователя (USER)
   /api/v1/user/cards:
     get:
       tags:
         - Пользователь (USER)
-      summary: Получение всех карт текущего пользователя
+      summary: Получение списка карт текущего пользователя
       security:
-        - bearerAuth: [] # Защищено JWT (требует ROLE_USER)
+        - bearerAuth: []
       parameters:
-        - name: page
-          in: query
-          schema: {type: integer, default: 0}
-          description: Номер страницы (начиная с 0).
-        - name: size
-          in: query
-          schema: {type: integer, default: 10}
-          description: Количество элементов на странице.
+        - $ref: '#/components/parameters/Pageable'
       responses:
         '200':
-          description: Успешный запрос.
+          description: Список карт текущего пользователя.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/CardResponse'
-        '403':
-          description: Доступ запрещен (неверный токен или роль).
+                $ref: '#/components/schemas/PageCardResponse'
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (не хватает роли USER).}
+
+  /api/v1/user/cards/{cardId}:
+    get:
+      tags:
+        - Пользователь (USER)
+      summary: Просмотр баланса карты
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+          description: ID карты для просмотра баланса.
+      responses:
+        '200':
+          description: Баланс карты успешно получен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (карта не принадлежит пользователю или не хватает роли USER).}
+        '404': {description: Карта не найдена.}
 
   /api/v1/user/cards/transfer:
     post:
@@ -180,7 +259,7 @@ paths:
         - Пользователь (USER)
       summary: Перевод средств между картами
       security:
-        - bearerAuth: [] # Защищено JWT (требует ROLE_USER)
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -188,24 +267,60 @@ paths:
             schema:
               $ref: '#/components/schemas/TransferRequest'
       responses:
+        '200': {description: Перевод успешно выполнен.}
+        '400': {description: Неверный запрос (например, отрицательная сумма, неверный ID карты).}
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (карта-источник не принадлежит пользователю или не хватает роли USER).}
+        '404': {description: Карта-источник или карта-получатель не найдена.}
+        '409': {description: Недостаточно средств на карте-источнике.}
+
+  # Эндпоинты для Администратора (ADMIN)
+  /api/v1/admin/users:
+    get:
+      tags:
+        - Администратор (ADMIN)
+      summary: Получение списка всех карт в системе
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Pageable'
+      responses:
         '200':
-          description: Перевод успешно выполнен.
-        '400':
-          description: Ошибка валидации (например, сумма <= 0, недостаточно средств).
-        '403':
-          description: Карта-источник не принадлежит текущему пользователю.
-        '404':
-          description: Карта не найдена.
+          description: Список всех карт.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCardResponse'
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (не хватает роли ADMIN).}
+
+  /api/v1/admin/users/{userId}:
+    delete:
+      tags:
+        - Администратор (ADMIN)
+      summary: Удаление пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+          description: ID пользователя для удаления.
+      responses:
+        '204': {description: Пользователь успешно удален.}
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (не хватает роли ADMIN).}
+        '404': {description: Пользователь не найден.}
 
 
-  # АДМИНИСТРАТИВНЫЕ ЭНДПОИНТЫ (/api/v1/admin)
   /api/v1/admin/cards:
     post:
       tags:
         - Администратор (ADMIN)
-      summary: Создание новой карты для указанного пользователя
+      summary: Создание новой карты
       security:
-        - bearerAuth: [] # Защищено JWT (требует ROLE_ADMIN)
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -219,11 +334,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CardResponse'
-        '403':
-          description: Доступ запрещен (не хватает прав администратора).
+        '400': {description: Неверный запрос (например, неверный формат номера карты/даты).}
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (не хватает роли ADMIN).}
+        '404': {description: Владелец карты (ownerId) не найден.}
 
   /api/v1/admin/cards/{cardId}/status:
-    put:
+    patch: # Изменено с PUT на PATCH для соответствия контроллеру
       tags:
         - Администратор (ADMIN)
       summary: Изменение статуса карты (ACTIVE/BLOCKED)
@@ -235,15 +352,17 @@ paths:
           required: true
           schema: {type: integer, format: int64}
           description: ID карты для изменения.
-        - name: status
-          in: query
-          required: true
-          schema: {type: string, enum: [ACTIVE, BLOCKED]}
-          description: Новый статус карты.
+      requestBody: # Используется тело запроса CardStatusRequest
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardStatusRequest'
       responses:
         '200': {description: Статус карты успешно обновлен.}
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (не хватает прав администратора).}
         '404': {description: Карта не найдена.}
-        '403': {description: Доступ запрещен.}
 
   /api/v1/admin/cards/{cardId}:
     delete:
@@ -259,6 +378,7 @@ paths:
           schema: {type: integer, format: int64}
           description: ID карты для удаления.
       responses:
-        '204': {description: Карта успешно удалена (No Content).}
+        '204': {description: Карта успешно удалена.}
+        '401': {description: Не авторизован.}
+        '403': {description: Доступ запрещен (не хватает прав администратора).}
         '404': {description: Карта не найдена.}
-        '403': {description: Доступ запрещен.}

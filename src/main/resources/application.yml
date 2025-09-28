@@ -16,7 +16,6 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/migration/master.yaml
-    clear-checksums: true
 
   web:
     resources:
@@ -30,7 +29,7 @@ spring:
       prefix: Bearer
 card:
   encryption:
-    secret: S3cr3tC4rdEncrYptK3yF0rDBData456789
+    secret: S3cr3tC4rdEncrYptK3yF0rDBData456
     algorithm: AES
 
 springdoc:

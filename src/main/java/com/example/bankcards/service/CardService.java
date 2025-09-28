@@ -11,13 +11,14 @@ import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.UserRepository;
 import com.example.bankcards.util.CardMaskingUtil;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.time.LocalDate;
 
 
 @Service
@@ -41,49 +42,50 @@ public class CardService {
         newCard.setCardNumber(request.getCardNumber());
         newCard.setBalance(BigDecimal.ZERO);
         newCard.setStatus(Card.CardStatus.ACTIVE);
+        newCard.setExpiryDate(LocalDate.parse(request.getExpiryDate()));
 
         Card savedCard = CARD_REPOSITORY.save(newCard);
         return mapToCardResponse(savedCard);
     }
 
     @Transactional
-    public void setCardStatus(Long cardId, String status) {
+    public void setCardStatus(Long cardId, Card.CardStatus status) {
 
-        Card card = CARD_REPOSITORY.findById(cardId)
-                .orElseThrow(() -> new CardNotFoundException("Card with ID " + cardId + " not found."));
-
-        try {
-            Card.CardStatus newStatus = Card.CardStatus.valueOf(status.toUpperCase());
-            card.setStatus(newStatus);
-            CARD_REPOSITORY.save(card);
-
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid status value: " + status + ". Must be ACTIVE or BLOCKED.");
+        int modified = CARD_REPOSITORY.updateCardStatus(cardId, status);
+        if (modified == 0) {
+            throw new CardNotFoundException("Card with ID " + cardId + " not found.");
         }
     }
 
     @Transactional
     public void deleteCard(Long cardId) {
-        if (!CARD_REPOSITORY.existsById(cardId)) {
-            throw new CardNotFoundException("Card with ID " + cardId + " not found for deletion.");
-        }
         CARD_REPOSITORY.deleteById(cardId);
     }
 
     @Transactional
-    public void transferMoney(Long userId, Long sourceCardId, Long targetCardId, BigDecimal amount) throws Exception {
+    public void deleteUser(Long userId) {
+        USER_REPOSITORY.deleteById(userId);
+    }
+
+    @Transactional
+    public void transferMoney(Long userId, Long sourceCardId, Long targetCardId, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Amount must be greater than zero");
         }
 
-        Card sourceCard = CARD_REPOSITORY.findById(sourceCardId).orElseThrow(() -> new CardNotFoundException("Source card not found."));
-        Card targetCard = CARD_REPOSITORY.findById(targetCardId).orElseThrow(() -> new CardNotFoundException("Target card not found."));
+        Card sourceCard = CARD_REPOSITORY.findByIdAndOwnerId(sourceCardId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Source card not found or does not belong to the current user."));
 
-        if(!sourceCard.getOwner().getId().equals(userId)) {
-            throw new AccessDeniedException("Source card does not belong to the current user.");
+        Card targetCard = CARD_REPOSITORY.findByIdAndOwnerId(targetCardId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Target card not found or does not belong to the current user."));
+
+        if (sourceCard.getStatus() != Card.CardStatus.ACTIVE) {
+            throw new IllegalStateException("Source card is not active.");
         }
-        if(sourceCard.getStatus() != Card.CardStatus.ACTIVE) {throw new IllegalStateException("Source card is not active.");}
-        if(sourceCard.getBalance().compareTo(amount) < 0){throw new InsufficientFundsException("Insufficient funds.");}
+
+        if (sourceCard.getBalance().compareTo(amount) < 0) {
+            throw new InsufficientFundsException("Insufficient funds.");
+        }
 
         sourceCard.setBalance(sourceCard.getBalance().subtract(amount));
         targetCard.setBalance(targetCard.getBalance().add(amount));
@@ -95,18 +97,33 @@ public class CardService {
     public CardResponse mapToCardResponse(Card card) {
         CardResponse cardResponse = new CardResponse();
 
-        String fullDecryptedNumber = card.getEncryptedCardNumber();
+        String fullDecryptedNumber = card.getCardNumber();
         String maskedNumber = CardMaskingUtil.maskCardNumber(fullDecryptedNumber);
         cardResponse.setMaskedCardNumber(maskedNumber);
+        cardResponse.setBalance(card.getBalance());
+        cardResponse.setStatus(card.getStatus().name());
+        cardResponse.setOwnerId(card.getOwner().getId());
+        cardResponse.setId(card.getId());
+        cardResponse.setExpiryDate(card.getExpiryDate());
 
         return cardResponse;
     }
 
-    public List<CardResponse> findMyCards(Long userId, Pageable pageable) {
-        List<Card> cards = CARD_REPOSITORY.findAllByOwnerId(userId, pageable).getContent();
+    public Page<CardResponse> findMyCards(Long userId, Pageable pageable) {
+        return CARD_REPOSITORY.findAllByOwnerId(userId, pageable)
+                .map(this::mapToCardResponse);
+    }
 
-        return cards.stream()
-                .map(this::mapToCardResponse)
-                .collect(Collectors.toList());
+    public Page<CardResponse> findAllCards(Pageable pageable) {
+        return CARD_REPOSITORY.findAll(pageable).map(this::mapToCardResponse);
+    }
+
+    public BigDecimal balanceView(Long cardId) {
+       User user = USER_REPOSITORY.findById(cardId).orElseThrow(() -> new UsernameNotFoundException("User not found."));
+
+       return user.getCards().stream()
+               .filter(card -> card.getStatus() == Card.CardStatus.ACTIVE)
+               .map(Card::getBalance)
+               .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }
