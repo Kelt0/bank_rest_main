@@ -3,10 +3,10 @@ package com.example.bankcards.service;
 import com.example.bankcards.entity.Card;
 import com.example.bankcards.entity.User;
 import com.example.bankcards.exception.AccessDeniedException;
-import com.example.bankcards.exception.CardNotFoundException;
 import com.example.bankcards.exception.InsufficientFundsException;
 import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.UserRepository;
+import com.example.bankcards.service.impl.CardService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -33,22 +33,10 @@ public class CardServiceTest {
         cardService = new CardService(cardRepository, userRepository);
     }
 
-    private Card createCard(Long cardId, Long ownerId, BigDecimal balance, Card.CardStatus status) {
-        Card card = new Card();
-        card.setId(cardId);
-        card.setBalance(balance);
-        card.setStatus(status);
-
-        User owner = new User();
-        owner.setId(ownerId);
-        card.setOwner(owner);
-        return card;
-    }
-
     @Test
     void transferMoney_Success() {
-        Card sourceCard = createCard(1L, USER_ID, new BigDecimal("200.00"), Card.CardStatus.ACTIVE);
-        Card targetCard = createCard(2L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
+        Card sourceCard = createActiveCard(1L, USER_ID, new BigDecimal("200.00"));
+        Card targetCard = createActiveCard(2L, USER_ID, new BigDecimal("50.00"));
 
         when(cardRepository.findByIdAndOwnerId(1L, USER_ID)).thenReturn(Optional.of(sourceCard));
         when(cardRepository.findByIdAndOwnerId(2L, USER_ID)).thenReturn(Optional.of(targetCard));
@@ -63,8 +51,8 @@ public class CardServiceTest {
 
     @Test
     void transferMoney_InsufficientFunds_ThrowsException() {
-        Card sourceCard = createCard(1L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
-        Card targetCard = createCard(2L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
+        Card sourceCard = createActiveCard(1L, USER_ID, new BigDecimal("50.00"));
+        Card targetCard = createActiveCard(2L, USER_ID, new BigDecimal("50.00"));
 
         when(cardRepository.findByIdAndOwnerId(1L, USER_ID)).thenReturn(Optional.of(sourceCard));
         when(cardRepository.findByIdAndOwnerId(2L, USER_ID)).thenReturn(Optional.of(targetCard));
@@ -75,8 +63,8 @@ public class CardServiceTest {
 
     @Test
     void transferMoney_AccessDenied_ThrowsException() {
-        Card sourceCard = createCard(1L, USER_ID + 1, new BigDecimal("200.00"), Card.CardStatus.ACTIVE);
-        Card targetCard = createCard(2L, USER_ID, new BigDecimal("50.00"), Card.CardStatus.ACTIVE);
+        Card sourceCard = createActiveCard(1L, USER_ID + 1, new BigDecimal("200.00"));
+        Card targetCard = createActiveCard(2L, USER_ID, new BigDecimal("50.00"));
 
         when(cardRepository.findByIdAndOwnerId(1L, USER_ID + 1)).thenReturn(Optional.of(sourceCard));
         when(cardRepository.findByIdAndOwnerId(2L, USER_ID)).thenReturn(Optional.of(targetCard));
@@ -88,7 +76,7 @@ public class CardServiceTest {
 
     @Test
     void setCardStatus_BlockCard_Success() {
-        Card card = createCard(5L, USER_ID, BigDecimal.ZERO, Card.CardStatus.ACTIVE);
+        Card card = createActiveCard(5L, USER_ID, BigDecimal.ZERO);
         when(cardRepository.updateCardStatus(5L, Card.CardStatus.BLOCKED))
                 .thenAnswer(invocation -> {
                     card.setStatus(Card.CardStatus.BLOCKED);
@@ -109,5 +97,17 @@ public class CardServiceTest {
         cardService.deleteCard(3L);
 
         verify(cardRepository, times(1)).deleteById(3L);
+    }
+
+    private Card createActiveCard(Long cardId, Long ownerId, BigDecimal balance) {
+        Card card = new Card();
+        card.setId(cardId);
+        card.setBalance(balance);
+        card.setStatus(Card.CardStatus.ACTIVE);
+
+        User owner = new User();
+        owner.setId(ownerId);
+        card.setOwner(owner);
+        return card;
     }
 }

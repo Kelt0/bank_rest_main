@@ -17,14 +17,16 @@ import java.io.IOException;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
-    private final JwtUtil JWT_UTIL;
-    private final UserDetailsService USER_DETAILS_SERVICE;
-    private final JwtProperties JWT_PROPERTIES;
+    private final JwtUtil jwtUtil;
+    private final UserDetailsService userDetailsService;
+    private final JwtProperties jwtProperties;
 
-    public JwtFilter(JwtUtil JWT_UTIL, UserDetailsService USER_DETAILS_SERVICE, JwtProperties JWT_PROPERTIES) {
-        this.JWT_UTIL = JWT_UTIL;
-        this.USER_DETAILS_SERVICE = USER_DETAILS_SERVICE;
-        this.JWT_PROPERTIES = JWT_PROPERTIES;
+    public JwtFilter(JwtUtil jwtUtil,
+                     UserDetailsService userDetailsService,
+                     JwtProperties jwtProperties) {
+        this.jwtUtil = jwtUtil;
+        this.userDetailsService = userDetailsService;
+        this.jwtProperties = jwtProperties;
     }
 
     @Override
@@ -32,9 +34,9 @@ public class JwtFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String jwt = parseJwt(request);
 
-        if(jwt != null && JWT_UTIL.validateToken(jwt)){
-            String username = JWT_UTIL.getUsernameFromJwt(jwt);
-            UserDetails userDetails = USER_DETAILS_SERVICE.loadUserByUsername(username);
+        if (jwt != null && jwtUtil.validateToken(jwt)) {
+            String username = jwtUtil.getUsernameFromJwt(jwt);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails,
                     null, userDetails.getAuthorities());
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -42,12 +44,11 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
-
     }
 
     private String parseJwt(HttpServletRequest request) {
-        String headerAuth = request.getHeader(JWT_PROPERTIES.getHeader());
-        String prefix = JWT_PROPERTIES.getPrefix() + " ";
+        String headerAuth = request.getHeader(jwtProperties.getHeader());
+        String prefix = jwtProperties.getPrefix() + " ";
 
         if (headerAuth != null && headerAuth.startsWith(prefix)){
             return headerAuth.substring(prefix.length());

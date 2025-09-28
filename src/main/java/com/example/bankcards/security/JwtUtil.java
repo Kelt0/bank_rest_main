@@ -6,43 +6,45 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
-import java.util.Date;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.stream.Collectors;
 
 @Component
 public class JwtUtil {
-    private final JwtProperties PROPERTIES;
-    private final Key KEY;
+    private final JwtProperties properties;
+    private final Key key;
 
     public JwtUtil(JwtProperties properties) {
-        this.PROPERTIES = properties;
-        this.KEY = Keys.hmacShaKeyFor(properties.getSecret().getBytes());
+        this.properties = properties;
+        this.key = Keys.hmacShaKeyFor(properties.getSecret().getBytes());
     }
     public String generateToken(Authentication authentication) {
         UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
-        Date now = new Date();
-        Date expriration = new Date(now.getTime() + PROPERTIES.getExpiration());
+        Instant now = Instant.now();
+        Instant expiration = now.plus(Duration.ofMillis(properties.getExpiration()));
 
         String roles = authentication.getAuthorities().stream()
-                .map(item -> item.getAuthority())
+                .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
 
         return Jwts.builder()
                 .setSubject(userPrincipal.getUsername())
                 .claim("roles", roles)
-                .setIssuedAt(now)
-                .setExpiration(expriration)
-                .signWith(KEY, SignatureAlgorithm.HS256)
+                .setIssuedAt(java.util.Date.from(now))
+                .setExpiration(java.util.Date.from(expiration))
+                .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
     public String getUsernameFromJwt(String token) {
         Claims claims = Jwts.parserBuilder()
-                .setSigningKey(KEY)
+                .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -50,12 +52,12 @@ public class JwtUtil {
         return claims.getSubject();
     }
 
-    public boolean validateToken(String token){
+    public boolean validateToken(String token) {
         try{
-            Jwts.parserBuilder().setSigningKey(KEY).build().parseClaimsJws(token);
+            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
             return true;
         }
-        catch(Exception e){
+        catch(Exception e) {
             return false;
         }
     }
