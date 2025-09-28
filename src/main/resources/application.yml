@@ -35,11 +35,10 @@ card:
 
 springdoc:
   api-docs:
-    enabled: false
+    enabled: true
   swagger-ui:
     enabled: true
-    path: /swagger-ui.html
-    url: /openapi.yaml
     operations-sorter: method
     tags-sorter: alpha
     try-it-out-enabled: true
+    url: /openapi.yaml

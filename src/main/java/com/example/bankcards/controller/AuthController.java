@@ -12,15 +12,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
-    private final AuthService AUTH_SERVICE;
+    private final AuthService authService;
 
     public AuthController(AuthService authService) {
-        this.AUTH_SERVICE = authService;
+        this.authService = authService;
     }
 
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> authenticateUser(@RequestBody LoginRequest loginRequest) {
-        String jwt = AUTH_SERVICE.authenticateUser(loginRequest);
+        String jwt = authService.authenticateUser(loginRequest);
         return ResponseEntity.ok(new JwtResponse(jwt));
     }
 }

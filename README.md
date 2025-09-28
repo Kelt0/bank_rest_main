@@ -42,4 +42,4 @@ Liquibase применяет миграции автоматически при 
 ## Документация API
 
 - Swagger UI: http://localhost:8080/swagger-ui/index.html
-- OpenAPI JSON: http://localhost:8080/v3/api-docs
+- OpenAPI JSON: http://localhost:8080/openapi.yaml
