@@ -55,9 +55,6 @@ public class AdminControllerIntegrationTcTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private CardRepository cardRepository;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private String obtainJwtToken(String username, String password) throws Exception {
