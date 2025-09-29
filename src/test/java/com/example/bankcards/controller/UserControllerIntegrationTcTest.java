@@ -86,8 +86,6 @@ public class UserControllerIntegrationTcTest {
         String userToken = obtainJwtToken("user", "user");
         String adminToken = obtainJwtToken("admin", "admin");
 
-        cardRepository.deleteAll();
-
         CardCreationRequest requestBody = new CardCreationRequest(101L, "1111222233334445", "2028-12-31");
 
         mockMvc.perform(post("/api/v1/admin/cards")
